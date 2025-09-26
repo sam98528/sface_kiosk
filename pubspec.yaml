@@ -54,6 +54,9 @@ dependencies:
   printing: ^5.13.4
   pdf: ^3.11.0
   image: ^4.1.7
+
+  # FFI support
+  ffi: ^2.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
