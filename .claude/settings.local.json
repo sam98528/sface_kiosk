@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(flutter packages pub run build_runner build:*)",
-      "Bash(flutter pub:*)"
+      "Bash(flutter pub:*)",
+      "Bash(git restore:*)",
+      "Bash(flutter clean:*)",
+      "Bash(flutter build:*)",
+      "Bash(flutter run:*)"
     ],
     "deny": [],
     "ask": []

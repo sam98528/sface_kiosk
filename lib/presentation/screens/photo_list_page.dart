@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../widgets/photo_detail_dialog.dart';
 import '../providers/photogoods_provider.dart';
 import '../../data/models/photogoods/search_photogoods.dart';
 
@@ -14,25 +15,38 @@ class PhotoListPage extends ConsumerStatefulWidget {
   ConsumerState<PhotoListPage> createState() => _PhotoListPageState();
 }
 
-class _PhotoListPageState extends ConsumerState<PhotoListPage> {
+class _PhotoListPageState extends ConsumerState<PhotoListPage>
+    with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref
           .read(photogoodsProvider.notifier)
           .searchPhotogoods(' ', refresh: true);
+      _maybeLoadMoreToFillViewport();
     });
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _maybeLoadMoreToFillViewport(),
+    );
   }
 
   void _onScroll() {
@@ -47,12 +61,30 @@ class _PhotoListPageState extends ConsumerState<PhotoListPage> {
     }
   }
 
+  void _maybeLoadMoreToFillViewport() {
+    if (!_scrollController.hasClients) return;
+    final bool hasMore = ref.read(photogoodsHasMoreProvider);
+    final bool isLoading = ref.read(photogoodsLoadingProvider);
+    if (!hasMore || isLoading) return;
+    final ScrollPosition position = _scrollController.position;
+    final bool notScrollable =
+        position.maxScrollExtent <= 0 || position.extentAfter < 200;
+    final bool nearBottom = position.pixels >= position.maxScrollExtent - 200;
+    if (notScrollable || nearBottom) {
+      ref.read(photogoodsProvider.notifier).loadMore();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final items = ref.watch(photogoodsItemsProvider);
     final isLoading = ref.watch(photogoodsLoadingProvider);
     final error = ref.watch(photogoodsErrorProvider);
     final hasMore = ref.watch(photogoodsHasMoreProvider);
+
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _maybeLoadMoreToFillViewport(),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -81,7 +113,7 @@ class _PhotoListPageState extends ConsumerState<PhotoListPage> {
                     padding: const EdgeInsets.all(8),
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
+                          crossAxisCount: 5,
                           crossAxisSpacing: 8,
                           mainAxisSpacing: 8,
                           childAspectRatio: 1,
@@ -196,59 +228,8 @@ class PhotoGridItem extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => Dialog(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppBar(
-              title: Text('Photo ${item.feedsIdx}'),
-              automaticallyImplyLeading: false,
-              actions: [
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            Container(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.7,
-                maxWidth: MediaQuery.of(context).size.width * 0.9,
-              ),
-              child: Image.network(
-                imageUrl,
-                fit: BoxFit.contain,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return SizedBox(
-                    height: 200,
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                            : null,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Feed ID: ${item.feedsIdx}'),
-                  Text('Member ID: ${item.memIdx}'),
-                  Text('Type: ${item.feedsType}'),
-                  Text('Views: ${item.feedsViewCount}'),
-                  if (item.feedsImgAttach.isNotEmpty)
-                    Text('Images: ${item.feedsImgAttach.length}'),
-                ],
-              ),
-            ),
-          ],
-        ),
+        backgroundColor: Colors.white,
+        child: PhotoDetailDialog(item: item, imageUrl: imageUrl),
       ),
     );
   }
